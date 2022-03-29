@@ -64,7 +64,21 @@ standard certficate issuing process. Do not use these addresses or private keys 
 
 Ensure your docker image is running and bitcoind process is started
 
-1. Create an 'issuing address' and save the output as follows:
+1. Creating a wallet first with `bitcoin-cli createwallet “<wallet name>”`
+
+   ```
+   bitcoin-cli createwallet "testwallet"
+   ```
+
+2. Load wallet `bitcoin-cli loadwallet "<path to the directory of the created wallet>"`
+
+   ```
+   bitcoin-cli loadwallet "/root/.bitcoin/regtest/wallets/testwallet/"
+   ```
+
+   You can `bitcoin-cli listwallets` to check if your wallet is loaded
+
+3. Create an _issuing address_ and save the output as follows:
 
    ```
    issuer=`bitcoin-cli getnewaddress`
@@ -72,48 +86,80 @@ Ensure your docker image is running and bitcoind process is started
    bitcoin-cli dumpprivkey $issuer > /etc/cert-issuer/pk_issuer.txt
    ```
 
-2. Don't forget to save snapshots so you don't lose your work (see step 4 of client setup)
+   `sed` command allows us to quickly remove or replace the content without having to open a file.
+
+4. Don't forget to save snapshots so you don't lose your work (see step 4 of client setup)
 
 ## Issuing certificates
 
-1. Add your certificate to /etc/cert-issuer/data/unsigned_certificates/.
+1.  Add your certificate to `/etc/cert-issuer/data/unsigned_certificates/`:
 
-   ```
-   # To use a sample unsigned certificate as follows:
-   cp /cert-issuer/examples/data-testnet/unsigned_certificates/verifiable-credential.json /etc/cert-issuer/data/unsigned_certificates/
+    To use a sample unsigned certificate as follows:
 
-   # If you created your own unsigned certificate using cert-tools (assuming you placed it under data/unsigned_certificates):
-   cp <cert-issuer-home>/data/unsigned_certificates/<your-cert-guid>.json /etc/cert-issuer/data/unsigned_certificates/
-   ```
+    ```
+    cp /cert-issuer/examples/data-testnet/unsigned_certificates/verifiable-credential.json /etc/cert-issuer/data/unsigned_certificates/
+    ```
 
-2. Make sure you have enough BTC in your issuing address.
+    If you created your own unsigned certificate using cert-tools (assuming you placed it under `data/unsigned_certificates`):
 
-   a. You're using bitcoind in regtest mode, so you can print money. This should give you 50 (fake) BTC:
+    ```
+    cp <cert-issuer-home>/data/unsigned_certificates/<your-cert-guid>.json /etc/cert-issuer/data/unsigned_certificates/
+    ```
 
-   ```
-   bitcoin-cli generate 101
-   bitcoin-cli getbalance
-   ```
+2.  Make sure you have enough BTC in your issuing address. You're using bitcoind in regtest mode, so you can print money. This should give you 50 (fake) BTC:
 
-   b. Send the money to your issuing address -- note that bitcoin-cli's standard denomination is bitcoins not satoshis! (In our
-   app, the standard unit is satoshis.) This command sends 5 bitcoins to the address
+    ```
+    bitcoin-cli -generate 101
+    ```
+
+    ```
+    bitcoin-cli getbalance
+    ```
+
+3.  **(Optional)** If you see this error:
+
+    ```
+    Fee estimation failed. Fallbackfee is disabled. Wait a few blocks or enable -fallbackfee.
+    ```
+
+    You might have to allow fallback fee in your `bitcoin.conf` (use Vim as the text editor). Add this line to `bitcoin.conf`: `fallbackfee=0.00001`
+
+    ```
+    vi /root/.bitcoin/bitcoin.conf
+    ```
+
+    You have to kill bitcoind daemon using `ps aux` and `kill <pid>` , then start it again with `bitcoind -daemon=<path to bitcoin conf file>` to apply new changes.
+
+4.  Send the money to your issuing address. Note that bitcoin-cli's standard denomination is bitcoins not satoshis! (In our app, the standard unit is satoshis.) This command sends 5 bitcoins to the address:
 
    ```
    bitcoin-cli sendtoaddress $issuer 5
    ```
 
-3. Issue the certificates on the blockchain
+5.  Issue the certificates on the blockchain. Add `--verification_method` with issuer's DID (learn more about Decentralized Identifiers [here](https://www.w3.org/TR/did-core/) and how to work with them [here](https://github.com/blockchain-certificates/cert-issuer/#working-with-dids))
 
-   ```
-   cert-issuer -c /etc/cert-issuer/conf.ini
-   ```
+    ```
+    cert-issuer -c /etc/cert-issuer/conf.ini --verification_method "<issuer's URL/DID>"
+    ```
 
-4. Your Blockchain certificates are located in `/etc/cert-issuer/data/blockchain_certificates`. Copy these to your local machine, and add them to cert-viewer's `cert_data` folder to see your certificates in the Certificate Viewer.
+    Or, you can add `verification_method=<issuer's URL/DID>` in `/etc/cert-issuer/conf.ini`:
 
-```
-docker ps  // shows the docker containerId
-docker cp <containerId>:/etc/cert-issuer/data/blockchain_certificates <localPath>/cert-viewer/cert_data
-```
+    ```
+    vi /etc/cert-issuer/conf.ini
+    ```
+
+    Then run:
+
+    ```
+      cert-issuer -c /etc/cert-issuer/conf.ini
+    ```
+
+6.  Your Blockchain certificates are located in `/etc/cert-issuer/data/blockchain_certificates`. Copy these to your local machine, and add them to cert-viewer's `cert_data` folder to see your certificates in the Certificate Viewer.
+
+    ```
+    docker ps  // shows the docker containerId
+    docker cp <containerId>:/etc/cert-issuer/data/blockchain_certificates <localPath>/cert-viewer/cert_data
+    ```
 
 # How batch issuing works
 
